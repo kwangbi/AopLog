@@ -2,29 +2,24 @@ package com.venus.aoplog.handler;
 
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.google.gson.Gson;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.venus.aoplog.exception.BusinessException;
 import com.venus.aoplog.response.ErrorResponse;
 import com.venus.aoplog.response.ResponseBase;
 import lombok.extern.slf4j.Slf4j;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoField;
-import java.util.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.web.servlet.NoHandlerFoundException;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Slf4j
 @RestControllerAdvice
