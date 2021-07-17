@@ -1,125 +1,89 @@
-package com.venus.aoplog.handler;
-
+package com.venus.aoplog.aop;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.venus.aoplog.exception.BusinessException;
-import com.venus.aoplog.response.ErrorResponse;
-import com.venus.aoplog.response.ResponseBase;
 import lombok.extern.slf4j.Slf4j;
+import org.aspectj.lang.JoinPoint;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.*;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
 
+@Aspect
+@Component
 @Slf4j
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-
-    private final String pattern = "yyyy-MM-dd HH:mm:ss.SSS";
+public class LogAopScm {
+    /**
+     *   @AopPointCut 설정된 메소드 또는 클래스 설정
+     *   AopPointCut 노테이션이 설정된 특정 클래스/메소드에만 AspectJ가 적용됨.
+     */
+    @Pointcut("execution(* com.venus.aoplog..*Controller.*(..))")
+    public void AopPointCut(){}
 
     /**
-     * 404 오류 처리
-     * @param e
-     * @param request
-     * @return
+     * @param joinPoint
      */
-    @ExceptionHandler(NoHandlerFoundException.class)
-    @ResponseStatus(value = HttpStatus.NOT_FOUND)
-    public ResponseEntity<ErrorResponse> handleNotFoundError(NoHandlerFoundException e,HttpServletRequest request){
-        String errCd = "COM002";
-        String timestamp = ExceptionLogPrint(e,request,errCd);
-
-        final ErrorResponse response = ErrorResponse.of("COM001",HttpStatus.NOT_FOUND.value(),e.toString(), timestamp);
-        return new ResponseEntity<>(response,HttpStatus.NOT_FOUND);
-    }
+    @Before("AopPointCut()")
+    public void before(JoinPoint joinPoint) {}
 
     /**
-     * 업무 오류 처리
-     * @param e
-     * @param request
-     * @return
+     * @param joinPoint
+     * @param result
      */
-    @ExceptionHandler(BusinessException.class)
-    protected ResponseEntity<Object> handleBusinessException(final BusinessException e,HttpServletRequest request){
-        String message = e.getMsg();
-        String timestamp = ExceptionLogPrint(e,request,e.getErrCd());
-
-        return new ResponseEntity<>(ResponseBase.business(e.getErrCd(),message,timestamp),HttpStatus.OK);
-    }
+    @AfterReturning(pointcut = "AopPointCut()", returning = "result")
+    public void AfterReturning(JoinPoint joinPoint, Object result) {}
 
     /**
-     * 공통 오류 처리
-     * @param e
-     * @param request
+     *
+     * @param joinPoint
      * @return
+     * @throws Throwable
      */
-    @ExceptionHandler(Exception.class)
-    @ResponseStatus(value = HttpStatus.INTERNAL_SERVER_ERROR)
-    protected ResponseEntity<ErrorResponse> handleException(Exception e, HttpServletRequest request){
-        String errCd = "COM001";
-        String timestamp = ExceptionLogPrint(e,request,errCd);
-        final ErrorResponse response = ErrorResponse.of("COM001",HttpStatus.INTERNAL_SERVER_ERROR.value(),e.toString(), timestamp);
-        return new ResponseEntity<>(response,HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-
-
-    /**
-     * 공통 로그 출력
-     * @param e
-     * @param request
-     * @return
-     */
-    private static String ExceptionLogPrint(Exception e,HttpServletRequest request,String errCd){
-        final String pattern = "yyyy-MM-dd HH:mm:ss.SSS";
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
-        String timestamp = simpleDateFormat.format(new Date());
+    @Around("AopPointCut()")
+    public Object Around(ProceedingJoinPoint joinPoint) throws Throwable {
+        HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
+        long start = System.currentTimeMillis();
+        Object result = joinPoint.proceed(joinPoint.getArgs());
 
         Map<Object, Object> paramMap = null;
 
-        Map<String, Object> errorMap = new HashMap<>();
-        errorMap.put("ERR_CD",errCd);
-        errorMap.put("ERR_MSG",e.toString());
-        errorMap.put("Request_Session",getSession(request));
-        errorMap.put("Request_Header",getHeader(request));
-
+        Map<String, Object> AopMap = new HashMap<>();
+        AopMap.put("Request_Session",getSession(request));
+        AopMap.put("Request_Header",getHeader(request));
         if(request.getHeader("content-type") == null || request.getHeader("content-type").indexOf("json") == -1 ){
             paramMap = getBodyParam(request);
         } else if(request.getHeader("content-type").indexOf("json") > -1){  //json 요청
             paramMap = getBody(request);
         }
+        AopMap.put("Request_Param",paramMap);
+        AopMap.put("Request_URI",request.getRequestURI());
+        AopMap.put("Request_HttpMethod",request.getMethod());
+        AopMap.put("Request_ServletPath",request.getServletPath());
+        AopMap.put("Response",result);
 
-        errorMap.put("Request_Param",paramMap);
-        errorMap.put("Request_URI",request.getRequestURI());
-        errorMap.put("Request_HttpMethod",request.getMethod());
-        errorMap.put("Request_ServletPath",request.getServletPath());
-        errorMap.put("timestamp",timestamp);
+        long end = System.currentTimeMillis();
 
         ObjectMapper mapper = new ObjectMapper();
         try{
             //String json = mapper.writeValueAsString(errorMap);
-            log.error("SCM ERR : {} / {}",mapper.writerWithDefaultPrettyPrinter().writeValueAsString(errorMap),e);
+            log.info("SCM AOP : {} ({}ms)",mapper.writerWithDefaultPrettyPrinter().writeValueAsString(AopMap), HttpStatus.OK, (end - start));
         }catch(JsonProcessingException je){
             je.printStackTrace();
-        }finally {
-            return timestamp;
         }
 
+        return result;
     }
-
 
     /**
      * Get Session param
@@ -210,6 +174,5 @@ public class GlobalExceptionHandler {
         }
         return new HashMap<>();
     }
-
 
 }

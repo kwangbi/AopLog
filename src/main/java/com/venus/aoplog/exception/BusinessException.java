@@ -15,6 +15,7 @@ public class BusinessException extends RuntimeException{
     public BusinessException(String errCd) {
         this.errCd = errCd;
     }
+
     public BusinessException(String errCd,String msg) {
         this.errCd = errCd;
         this.msg = msg;

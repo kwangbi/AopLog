@@ -1,5 +1,6 @@
 package com.venus.aoplog.controller;
 
+import com.venus.aoplog.dto.testDTO;
 import com.venus.aoplog.response.ResponseBase;
 import com.venus.aoplog.service.MainService;
 import lombok.AllArgsConstructor;
@@ -18,8 +19,9 @@ public class MainController {
     }
 
     @PostMapping("/test")
-    public String TestPost(){
-        return "post";
+    public ResponseBase<Object> TestPost(@RequestBody testDTO dto){
+
+        return ResponseBase.of(service.MainPostService(dto));
     }
 
 }
