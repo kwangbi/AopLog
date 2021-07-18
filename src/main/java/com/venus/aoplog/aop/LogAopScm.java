@@ -71,6 +71,7 @@ public class LogAopScm {
         Object result = null;
         long start = System.currentTimeMillis();
         ExceptionMap = new HashMap<>();
+        HttpStatus status = HttpStatus.OK;
 
         try{
             result = joinPoint.proceed(joinPoint.getArgs());
@@ -79,6 +80,7 @@ public class LogAopScm {
             ExceptionMap.put("printStackTrace",be);
             return exceptionHandler.handleBusinessException(be,request);
         }catch (Exception e){
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
             ExceptionMap.put("message",e.getMessage());
             ExceptionMap.put("printStackTrace",e);
             return exceptionHandler.handleException(e,request);
@@ -104,7 +106,7 @@ public class LogAopScm {
 
             ObjectMapper mapper = new ObjectMapper();
             try {
-                log.info("SCM AOP : {} ({}ms) ", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(AopMap), HttpStatus.OK, (end - start));
+                log.info("SCM AOP : {} {} ({}ms) ", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(AopMap), status, (end - start));
             } catch (JsonProcessingException je) {
                 je.printStackTrace();
             }
