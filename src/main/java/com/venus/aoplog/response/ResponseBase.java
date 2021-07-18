@@ -11,6 +11,7 @@ public class ResponseBase<T> {
     protected String code = "00";
     protected String message = "SUCCESS";
     protected String timestamp;
+    private int status = 200;
     protected T result;
 
     protected ResponseBase() {
@@ -34,11 +35,12 @@ public class ResponseBase<T> {
         return new ResponseBase<>(result);
     }
 
-    public static <T> ResponseBase<T> business(final String code,final String message,final String timestamp){
+    public static <T> ResponseBase<T> error(final int status,final String code,final String message,final String timestamp){
         ResponseBase<T> res = new ResponseBase<>();
         res.setCode(code);
         res.setTimestamp(timestamp);
         res.setMessage(message);
+        res.setStatus(status);
         return res;
     }
 

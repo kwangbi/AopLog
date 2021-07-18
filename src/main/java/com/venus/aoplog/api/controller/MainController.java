@@ -1,8 +1,8 @@
-package com.venus.aoplog.controller;
+package com.venus.aoplog.api.controller;
 
 import com.venus.aoplog.dto.testDTO;
 import com.venus.aoplog.response.ResponseBase;
-import com.venus.aoplog.service.MainService;
+import com.venus.aoplog.api.service.MainService;
 import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,4 +24,9 @@ public class MainController {
         return ResponseBase.of(service.MainPostService(dto));
     }
 
+
+    @GetMapping("/test2")
+    public ResponseBase<Object> TestGet2(){
+        return ResponseBase.of(service.MainTest("111","fjdskfdjkfdskl"));
+    }
 }

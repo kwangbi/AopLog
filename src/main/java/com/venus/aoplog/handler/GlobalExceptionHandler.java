@@ -4,13 +4,10 @@ package com.venus.aoplog.handler;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.venus.aoplog.exception.BusinessException;
-import com.venus.aoplog.response.ErrorResponse;
 import com.venus.aoplog.response.ResponseBase;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
@@ -29,8 +26,6 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private final String pattern = "yyyy-MM-dd HH:mm:ss.SSS";
-
     /**
      * 404 오류 처리
      * @param e
@@ -38,13 +33,10 @@ public class GlobalExceptionHandler {
      * @return
      */
     @ExceptionHandler(NoHandlerFoundException.class)
-    @ResponseStatus(value = HttpStatus.NOT_FOUND)
-    public ResponseEntity<ErrorResponse> handleNotFoundError(NoHandlerFoundException e,HttpServletRequest request){
+    public ResponseBase<Object> handleNotFoundError(NoHandlerFoundException e,HttpServletRequest request){
         String errCd = "COM002";
         String timestamp = ExceptionLogPrint(e,request,errCd);
-
-        final ErrorResponse response = ErrorResponse.of("COM001",HttpStatus.NOT_FOUND.value(),e.toString(), timestamp);
-        return new ResponseEntity<>(response,HttpStatus.NOT_FOUND);
+        return ResponseBase.error(HttpStatus.NOT_FOUND.value(),errCd,e.getMessage(),timestamp);
     }
 
     /**
@@ -54,12 +46,14 @@ public class GlobalExceptionHandler {
      * @return
      */
     @ExceptionHandler(BusinessException.class)
-    protected ResponseEntity<Object> handleBusinessException(final BusinessException e,HttpServletRequest request){
+    public ResponseBase<Object> handleBusinessException(final BusinessException e,HttpServletRequest request){
+        String errCd = "BE0001";
         String message = e.getMsg();
-        String timestamp = ExceptionLogPrint(e,request,e.getErrCd());
-
-        return new ResponseEntity<>(ResponseBase.business(e.getErrCd(),message,timestamp),HttpStatus.OK);
+        //String timestamp = ExceptionLogPrint(e,request,errCd);
+        String timestamp = getTimestamp();
+        return ResponseBase.error(HttpStatus.OK.value(),errCd,message,timestamp);
     }
+
 
     /**
      * 공통 오류 처리
@@ -67,13 +61,12 @@ public class GlobalExceptionHandler {
      * @param request
      * @return
      */
+
     @ExceptionHandler(Exception.class)
-    @ResponseStatus(value = HttpStatus.INTERNAL_SERVER_ERROR)
-    protected ResponseEntity<ErrorResponse> handleException(Exception e, HttpServletRequest request){
+    public ResponseBase<Object> handleException(Exception e, HttpServletRequest request){
         String errCd = "COM001";
-        String timestamp = ExceptionLogPrint(e,request,errCd);
-        final ErrorResponse response = ErrorResponse.of("COM001",HttpStatus.INTERNAL_SERVER_ERROR.value(),e.toString(), timestamp);
-        return new ResponseEntity<>(response,HttpStatus.INTERNAL_SERVER_ERROR);
+        String timestamp = getTimestamp();
+        return ResponseBase.error(HttpStatus.INTERNAL_SERVER_ERROR.value(),errCd,e.getMessage(),timestamp);
     }
 
 
@@ -84,9 +77,7 @@ public class GlobalExceptionHandler {
      * @return
      */
     private static String ExceptionLogPrint(Exception e,HttpServletRequest request,String errCd){
-        final String pattern = "yyyy-MM-dd HH:mm:ss.SSS";
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
-        String timestamp = simpleDateFormat.format(new Date());
+        String timestamp = getTimestamp();
 
         Map<Object, Object> paramMap = null;
 
@@ -120,6 +111,19 @@ public class GlobalExceptionHandler {
 
     }
 
+    /**
+     * timestamp 가져오기
+     * @param
+     * @param
+     * @return
+     */
+    private static String getTimestamp(){
+        final String pattern = "yyyy-MM-dd HH:mm:ss.SSS";
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
+        String timestamp = simpleDateFormat.format(new Date());
+
+        return timestamp;
+    }
 
     /**
      * Get Session param
@@ -210,6 +214,8 @@ public class GlobalExceptionHandler {
         }
         return new HashMap<>();
     }
+
+
 
 
 }

@@ -2,10 +2,13 @@ package com.venus.aoplog.aop;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.venus.aoplog.exception.BusinessException;
+import com.venus.aoplog.handler.GlobalExceptionHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.*;
+import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -16,6 +19,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Method;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +28,17 @@ import java.util.Map;
 @Component
 @Slf4j
 public class LogAopScm {
+
+    private final GlobalExceptionHandler exceptionHandler;  // Exception
+
+    public LogAopScm(GlobalExceptionHandler exceptionHandler) {
+        this.exceptionHandler = exceptionHandler;
+    }
+
+    private Map<String,Object> apiMap = null;
+    private Map<String,Object> ExceptionMap = null;
+
+
     /**
      *   @AopPointCut 설정된 메소드 또는 클래스 설정
      *   AopPointCut 노테이션이 설정된 특정 클래스/메소드에만 AspectJ가 적용됨.
@@ -53,37 +68,67 @@ public class LogAopScm {
     @Around("AopPointCut()")
     public Object Around(ProceedingJoinPoint joinPoint) throws Throwable {
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
+        Object result = null;
         long start = System.currentTimeMillis();
-        Object result = joinPoint.proceed(joinPoint.getArgs());
+        ExceptionMap = new HashMap<>();
 
-        Map<Object, Object> paramMap = null;
-
-        Map<String, Object> AopMap = new HashMap<>();
-        AopMap.put("Request_Session",getSession(request));
-        AopMap.put("Request_Header",getHeader(request));
-        if(request.getHeader("content-type") == null || request.getHeader("content-type").indexOf("json") == -1 ){
-            paramMap = getBodyParam(request);
-        } else if(request.getHeader("content-type").indexOf("json") > -1){  //json 요청
-            paramMap = getBody(request);
-        }
-        AopMap.put("Request_Param",paramMap);
-        AopMap.put("Request_URI",request.getRequestURI());
-        AopMap.put("Request_HttpMethod",request.getMethod());
-        AopMap.put("Request_ServletPath",request.getServletPath());
-        AopMap.put("Response",result);
-
-        long end = System.currentTimeMillis();
-
-        ObjectMapper mapper = new ObjectMapper();
         try{
-            //String json = mapper.writeValueAsString(errorMap);
-            log.info("SCM AOP : {} ({}ms)",mapper.writerWithDefaultPrettyPrinter().writeValueAsString(AopMap), HttpStatus.OK, (end - start));
-        }catch(JsonProcessingException je){
-            je.printStackTrace();
-        }
+            result = joinPoint.proceed(joinPoint.getArgs());
+        }catch (BusinessException be){
+            ExceptionMap.put("message",be.getMsg());
+            ExceptionMap.put("printStackTrace",be);
+            return exceptionHandler.handleBusinessException(be,request);
+        }catch (Exception e){
+            ExceptionMap.put("message",e.getMessage());
+            ExceptionMap.put("printStackTrace",e);
+            return exceptionHandler.handleException(e,request);
+        }finally{
+            Map<Object, Object> paramMap = null;
+            Map<String, Object> AopMap = new HashMap<>();
+            AopMap.put("Request_Session", getSession(request));
+            AopMap.put("Request_Header", getHeader(request));
+            if (request.getHeader("content-type") == null || request.getHeader("content-type").indexOf("json") == -1) {
+                paramMap = getBodyParam(request);
+            } else if (request.getHeader("content-type").indexOf("json") > -1) {  //json 요청
+                paramMap = getBody(request);
+            }
+            AopMap.put("Request_Param", paramMap);
+            AopMap.put("Request_URI", request.getRequestURI());
+            AopMap.put("Request_HttpMethod", request.getMethod());
+            AopMap.put("Request_ServletPath", request.getServletPath());
+            AopMap.put("API_PARAM", apiMap);
+            AopMap.put("Response", result);
+            AopMap.put("Exception", ExceptionMap);
 
+            long end = System.currentTimeMillis();
+
+            ObjectMapper mapper = new ObjectMapper();
+            try {
+                log.info("SCM AOP : {} ({}ms) ", mapper.writerWithDefaultPrettyPrinter().writeValueAsString(AopMap), HttpStatus.OK, (end - start));
+            } catch (JsonProcessingException je) {
+                je.printStackTrace();
+            }
+
+        }
         return result;
     }
+
+    @Pointcut("@annotation(com.venus.aoplog.aop.ApiValidator)")
+    public void accountValidator(){}
+
+    @Before("accountValidator()")
+    public void validateAccount(JoinPoint joinPoint){
+        Object[] parameterValues = joinPoint.getArgs();
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
+        String parameterName;
+        apiMap = new HashMap<>();
+        for (int i = 0; i < method.getParameters().length; i++) {
+            parameterName = method.getParameters()[i].getName();
+            apiMap.put(parameterName,parameterValues[i]);
+        }
+    }
+
 
     /**
      * Get Session param
@@ -95,7 +140,6 @@ public class LogAopScm {
         Enumeration<String> sessionEnum = request.getSession().getAttributeNames();
         while(sessionEnum.hasMoreElements()){
             String sessionAttribute = sessionEnum.nextElement();
-            //log.info("Request Session: {} {}",sessionAttribute,request.getSession().getAttribute(sessionAttribute));
             sessionMap.put(sessionAttribute,request.getSession().getAttribute(sessionAttribute));
         }
 
@@ -113,7 +157,6 @@ public class LogAopScm {
         while(headerEnum.hasMoreElements()){
             String headerName = (String)headerEnum.nextElement();
             String headerValue = request.getHeader(headerName);
-            //log.info("Request Header: {} {}",headerName,headerValue);
             headerMap.put(headerName,headerValue);
         }
 
